@@ -1,0 +1,22 @@
+# Secrets
+.Renviron
+
+# R / RStudio
+.Rhistory
+.RData
+.Ruserdata
+.Rproj.user/
+
+# macOS
+.DS_Store
+
+# Raw exports from FileMaker
+data/raw/fm_raw_*.xlsx
+
+# Generated outputs
+data/output/occurrence_*.csv
+data/output/bad_projected_coordinates.xlsx
+
+# Optional: keep directories in Git if you add .gitkeep files
+!data/raw/.gitkeep
+!data/output/.gitkeep
