@@ -2,20 +2,6 @@
 
 Pipeline for exporting herbarium data from FileMaker and transforming it to Darwin Core (DwC).
 
-## Project structure
-
-.
-├── config
-│   └── col-map.xlsx
-├── data
-│   ├── output
-│   └── raw
-├── scripts
-│   ├── fetch_fm_data.R
-│   ├── run_pipeline.R
-│   └── transform_to_dwc.R
-└── hbdb-to-dwc.Rproj
-
 ## What the pipeline does
 
 1. Fetches raw export data from the FileMaker Data API
