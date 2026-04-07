@@ -1,4 +1,4 @@
-# hbdb-to-dwc
+# herbarium-data
 
 Pipeline for exporting herbarium data from FileMaker, transforming it to Darwin Core (DwC), and optionally loading it into PostgreSQL.
 
