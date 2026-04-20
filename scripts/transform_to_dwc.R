@@ -422,9 +422,9 @@ if ("RUBIN" %in% names(fm_raw)) {
 
 # --- eventDate ---------------------------------------------------------------
 
-yr <- to_num(fm_raw$Year)
-mo <- to_num(fm_raw$Month)
-dy <- to_num(fm_raw$Day)
+yr <- as.integer(fm_raw$Year)
+mo <- as.integer(fm_raw$Month)
+dy <- as.integer(fm_raw$Day)
 
 date <- rep(NA_character_, nrow(fm_raw))
 
@@ -432,12 +432,14 @@ has_year  <- !is.na(yr)
 has_month <- has_year & !is.na(mo)
 has_day   <- has_month & !is.na(dy)
 
-date[has_year]  <- sprintf("%04d", as.integer(yr[has_year]))
-date[has_month] <- sprintf("%04d-%02d", as.integer(yr[has_month]), as.integer(mo[has_month]))
-date[has_day]   <- sprintf("%04d-%02d-%02d", as.integer(yr[has_day]), as.integer(mo[has_day]), as.integer(dy[has_day]))
+date[has_year]  <- sprintf("%04d", yr[has_year])
+date[has_month] <- sprintf("%04d-%02d", yr[has_month], mo[has_month])
+date[has_day]   <- sprintf("%04d-%02d-%02d", yr[has_day], mo[has_day], dy[has_day])
 
 dwc[, eventDate := date]
-
+dwc[, year := yr]
+dwc[, month := mo]
+dwc[, day := dy]
 
 # --- Clean character fields --------------------------------------------------
 
