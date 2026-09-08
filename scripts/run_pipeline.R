@@ -1,21 +1,21 @@
 # ------------------------------------------------------------
-# Run pipeline: FileMaker -> Darwin Core -> PostgreSQL
+# Run pipeline: FileMaker -> Darwin Core -> PostgreSQL -> IPT
 # ------------------------------------------------------------
 # - Chooses whether to read latest raw export file or fetch new data
 # - Runs full transformation pipeline
 # - Optionally loads latest raw and DwC files into PostgreSQL
+# - Optionally publishes a new version of the IPT resource,
+#   gated behind a QA check from transform_to_dwc.R
 # ------------------------------------------------------------
 
 rm(list = ls())
 
 # --- Settings ----------------------------------------------------------------
 
-# input_mode <- "file"   # "file" or "fetch"
-input_mode <- "file"
-
-load_to_db <- TRUE
+input_mode <- "file"  # "file" or "fetch"
+load_to_db  <- TRUE
 check_media <- FALSE
-
+publish_ipt <- TRUE
 
 # --- Validate settings -------------------------------------------------------
 
@@ -23,12 +23,12 @@ if (!input_mode %in% c("file", "fetch")) {
   stop("Invalid input_mode. Use 'file' or 'fetch'.")
 }
 
-
 # --- Run ---------------------------------------------------------------------
 
 cat("Starting pipeline...\n\n")
-cat("Input mode: ", input_mode, "\n", sep = "")
-cat("Load to PostgreSQL: ", load_to_db, "\n\n", sep = "")
+cat("Input mode:         ", input_mode,  "\n", sep = "")
+cat("Load to PostgreSQL: ", load_to_db,  "\n", sep = "")
+cat("Publish to IPT:     ", publish_ipt, "\n\n", sep = "")
 
 if (input_mode == "fetch") {
   source("scripts/fetch_fm_data.R", echo = FALSE)
@@ -42,6 +42,10 @@ source("scripts/transform_to_dwc.R", echo = FALSE)
 
 if (load_to_db) {
   source("scripts/load_to_postgres.R", echo = FALSE)
+}
+
+if (publish_ipt) {
+  source("scripts/publish_ipt.R", echo = FALSE)
 }
 
 cat("\nPipeline finished\n")

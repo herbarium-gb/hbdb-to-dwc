@@ -39,7 +39,7 @@ if (exists("fm_raw", inherits = FALSE)) {
   }
   
   latest_file <- max(files)
-  fm_raw <- as.data.table(read_excel(latest_file, col_types = "text"))
+  fm_raw      <- as.data.table(read_excel(latest_file, col_types = "text"))
   input_source <- paste("file:", latest_file)
 }
 
@@ -58,26 +58,22 @@ has_value <- function(x) {
 }
 
 append_json_prop <- function(old, key, value) {
-  old <- as.character(old)
+  old   <- as.character(old)
   value <- as.character(value)
-  out <- old
+  out   <- old
   
   esc <- function(x) {
     x <- gsub("\\\\", "\\\\\\\\", x)
     gsub("\"", "\\\\\"", x)
   }
   
-  idx <- has_value(value)
+  idx      <- has_value(value)
   new_json <- paste0("{\"", key, "\":\"", esc(value), "\"}")
   
   out[idx & !has_value(old)] <- new_json[idx & !has_value(old)]
-  out[idx & has_value(old)] <- paste0(
+  out[idx &  has_value(old)] <- paste0(
     sub("\\}$", "", old[idx & has_value(old)]),
-    ",\"",
-    key,
-    "\":\"",
-    esc(value[idx & has_value(old)]),
-    "\"}"
+    ",\"", key, "\":\"", esc(value[idx & has_value(old)]), "\"}"
   )
   
   out
@@ -108,7 +104,7 @@ is_valid_rt90 <- function(n, o) {
 is_valid_sweref <- function(n, o) {
   !is.na(n) & !is.na(o) &
     n >= 6100000 & n <= 7700000 &
-    o >= 250000 & o <= 950000
+    o >= 250000  & o <= 950000
 }
 
 check_media_exists <- function(urls) {
@@ -116,14 +112,11 @@ check_media_exists <- function(urls) {
   
   vapply(urls, function(u) {
     if (is.na(u) || u == "") return(NA)
-    
     tryCatch({
       con <- url(u, open = "rb")
       close(con)
       TRUE
-    }, error = function(e) {
-      FALSE
-    })
+    }, error = function(e) FALSE)
   }, logical(1))
 }
 
@@ -135,31 +128,16 @@ dwc_cols <- trimws(col_map$`dwc-field`)
 dwc_cols <- dwc_cols[dwc_cols != "" & !is.na(dwc_cols)]
 
 derived_cols <- c(
-  "decimalLatitude",
-  "decimalLongitude",
-  "geodeticDatum",
-  "georeferenceRemarks",
-  "verbatimLatitude",
-  "verbatimLongitude",
-  "verbatimCoordinateSystem",
-  "verbatimSRS",
-  "dynamicProperties",
-  "eventDate",
-  "year",
-  "month",
-  "day"
+  "decimalLatitude", "decimalLongitude", "geodeticDatum", "georeferenceRemarks",
+  "verbatimLatitude", "verbatimLongitude", "verbatimCoordinateSystem", "verbatimSRS",
+  "dynamicProperties", "eventDate", "year", "month", "day"
 )
 
 all_cols <- unique(c(dwc_cols, derived_cols))
 
 # --- Initialize DwC table ----------------------------------------------------
 
-dwc <- data.table(matrix(
-  NA_character_,
-  nrow = nrow(fm_raw),
-  ncol = length(all_cols)
-))
-
+dwc <- data.table(matrix(NA_character_, nrow = nrow(fm_raw), ncol = length(all_cols)))
 setnames(dwc, all_cols)
 
 # --- Map source fields -------------------------------------------------------
@@ -196,11 +174,8 @@ if (!"id" %in% names(dwc) && "AccessionNo" %in% names(fm_raw)) {
 
 if ("Image1" %in% names(fm_raw) && "AccessionNo" %in% names(fm_raw)) {
   idx <- has_value(fm_raw$Image1)
-  
   dwc[idx, associatedMedia := paste0(
-    "https://herbarium.gu.se/web/images/",
-    fm_raw$AccessionNo[idx],
-    ".jpg"
+    "https://herbarium.gu.se/web/images/", fm_raw$AccessionNo[idx], ".jpg"
   )]
 }
 
@@ -218,191 +193,130 @@ fm_raw[, `:=`(
 bad_sweref <- fm_raw[
   has_value(Sweref_N) & has_value(Sweref_O) &
     !is_valid_sweref(Sweref_N_num, Sweref_O_num),
-  .(
-    AccessionNo,
-    Sweref_N,
-    Sweref_O,
-    LatitudeDegree,
-    LatitudeMinute,
-    LatitudeSecond,
-    LatitudeDirection,
-    LongitudeDegree,
-    LongitudeMinute,
-    LongitudeSecond,
-    LongitudeDirection,
-    reason = "SWEREF outside plausible Swedish range"
-  )
+  .(AccessionNo, Sweref_N, Sweref_O,
+    LatitudeDegree, LatitudeMinute, LatitudeSecond, LatitudeDirection,
+    LongitudeDegree, LongitudeMinute, LongitudeSecond, LongitudeDirection,
+    reason = "SWEREF outside plausible Swedish range")
 ]
 
 bad_rt90 <- fm_raw[
   has_value(RiketsN) & has_value(RiketsO) &
     !is_valid_rt90(RiketsN_num, RiketsO_num),
-  .(
-    AccessionNo,
-    RiketsN,
-    RiketsO,
-    LatitudeDegree,
-    LatitudeMinute,
-    LatitudeSecond,
-    LatitudeDirection,
-    LongitudeDegree,
-    LongitudeMinute,
-    LongitudeSecond,
-    LongitudeDirection,
-    reason = "RT90 outside plausible Swedish range"
-  )
+  .(AccessionNo, RiketsN, RiketsO,
+    LatitudeDegree, LatitudeMinute, LatitudeSecond, LatitudeDirection,
+    LongitudeDegree, LongitudeMinute, LongitudeSecond, LongitudeDirection,
+    reason = "RT90 outside plausible Swedish range")
 ]
 
 # --- Coordinates: 1. direct decimal degrees ----------------------------------
 
-lon_deg <- to_num(fm_raw$LongitudeDegree)
-lat_deg <- to_num(fm_raw$LatitudeDegree)
-
-idx_direct <- has_value(fm_raw$LongitudeDegree) &
-  has_value(fm_raw$LatitudeDegree) &
-  grepl("\\.", fm_raw$LongitudeDegree) &
-  grepl("\\.", fm_raw$LatitudeDegree)
+lon_deg    <- to_num(fm_raw$LongitudeDegree)
+lat_deg    <- to_num(fm_raw$LatitudeDegree)
+idx_direct <- has_value(fm_raw$LongitudeDegree) & has_value(fm_raw$LatitudeDegree) &
+  grepl("\\.", fm_raw$LongitudeDegree) & grepl("\\.", fm_raw$LatitudeDegree)
 
 dwc[idx_direct, `:=`(
-  decimalLongitude = sprintf("%.5f", lon_deg[idx_direct]),
-  decimalLatitude = sprintf("%.5f", lat_deg[idx_direct]),
-  geodeticDatum = "EPSG:4326",
-  georeferenceRemarks = NA_character_,
-  verbatimLatitude = trimws(fm_raw$LatitudeDegree[idx_direct]),
-  verbatimLongitude = trimws(fm_raw$LongitudeDegree[idx_direct]),
+  decimalLongitude        = sprintf("%.5f", lon_deg[idx_direct]),
+  decimalLatitude         = sprintf("%.5f", lat_deg[idx_direct]),
+  geodeticDatum           = "EPSG:4326",
+  georeferenceRemarks     = NA_character_,
+  verbatimLatitude        = trimws(fm_raw$LatitudeDegree[idx_direct]),
+  verbatimLongitude       = trimws(fm_raw$LongitudeDegree[idx_direct]),
   verbatimCoordinateSystem = "decimal degrees",
-  verbatimSRS = "EPSG:4326"
+  verbatimSRS             = "EPSG:4326"
 )]
 
 # --- Coordinates: 2. DMS -----------------------------------------------------
 
 idx_missing <- !(has_value(dwc$decimalLatitude) & has_value(dwc$decimalLongitude))
+idx_dms     <- idx_missing &
+  has_value(fm_raw$LongitudeDegree) & has_value(fm_raw$LatitudeDegree) &
+  !grepl("\\.", fm_raw$LongitudeDegree) & !grepl("\\.", fm_raw$LatitudeDegree)
 
-idx_dms <- idx_missing &
-  has_value(fm_raw$LongitudeDegree) &
-  has_value(fm_raw$LatitudeDegree) &
-  !grepl("\\.", fm_raw$LongitudeDegree) &
-  !grepl("\\.", fm_raw$LatitudeDegree)
-
-lon_num <- dms_to_decimal(
-  fm_raw$LongitudeDegree,
-  fm_raw$LongitudeMinute,
-  fm_raw$LongitudeSecond,
-  fm_raw$LongitudeDirection
-)
-
-lat_num <- dms_to_decimal(
-  fm_raw$LatitudeDegree,
-  fm_raw$LatitudeMinute,
-  fm_raw$LatitudeSecond,
-  fm_raw$LatitudeDirection
-)
+lon_num <- dms_to_decimal(fm_raw$LongitudeDegree, fm_raw$LongitudeMinute,
+                          fm_raw$LongitudeSecond,  fm_raw$LongitudeDirection)
+lat_num <- dms_to_decimal(fm_raw$LatitudeDegree,  fm_raw$LatitudeMinute,
+                          fm_raw$LatitudeSecond,   fm_raw$LatitudeDirection)
 
 lon_txt <- sprintf("%.4f", lon_num)
 lat_txt <- sprintf("%.4f", lat_num)
 
-lon_txt[idx_dms & has_value(fm_raw$LongitudeSecond)] <- sprintf(
-  "%.5f",
-  lon_num[idx_dms & has_value(fm_raw$LongitudeSecond)]
-)
+lon_txt[idx_dms & has_value(fm_raw$LongitudeSecond)] <-
+  sprintf("%.5f", lon_num[idx_dms & has_value(fm_raw$LongitudeSecond)])
+lat_txt[idx_dms & has_value(fm_raw$LatitudeSecond)]  <-
+  sprintf("%.5f", lat_num[idx_dms & has_value(fm_raw$LatitudeSecond)])
 
-lat_txt[idx_dms & has_value(fm_raw$LatitudeSecond)] <- sprintf(
-  "%.5f",
-  lat_num[idx_dms & has_value(fm_raw$LatitudeSecond)]
-)
-
-ver_lat_dms <- gsub(
-  "\\s+",
-  " ",
-  trimws(paste(
-    fm_raw$LatitudeDegree,
-    fifelse(has_value(fm_raw$LatitudeMinute), fm_raw$LatitudeMinute, ""),
-    fifelse(has_value(fm_raw$LatitudeSecond), fm_raw$LatitudeSecond, ""),
-    fm_raw$LatitudeDirection
-  ))
-)
-
-ver_lon_dms <- gsub(
-  "\\s+",
-  " ",
-  trimws(paste(
-    fm_raw$LongitudeDegree,
-    fifelse(has_value(fm_raw$LongitudeMinute), fm_raw$LongitudeMinute, ""),
-    fifelse(has_value(fm_raw$LongitudeSecond), fm_raw$LongitudeSecond, ""),
-    fm_raw$LongitudeDirection
-  ))
-)
+ver_lat_dms <- gsub("\\s+", " ", trimws(paste(
+  fm_raw$LatitudeDegree,
+  fifelse(has_value(fm_raw$LatitudeMinute),  fm_raw$LatitudeMinute,  ""),
+  fifelse(has_value(fm_raw$LatitudeSecond),  fm_raw$LatitudeSecond,  ""),
+  fm_raw$LatitudeDirection
+)))
+ver_lon_dms <- gsub("\\s+", " ", trimws(paste(
+  fm_raw$LongitudeDegree,
+  fifelse(has_value(fm_raw$LongitudeMinute), fm_raw$LongitudeMinute, ""),
+  fifelse(has_value(fm_raw$LongitudeSecond), fm_raw$LongitudeSecond, ""),
+  fm_raw$LongitudeDirection
+)))
 
 dwc[idx_dms, `:=`(
-  decimalLongitude = lon_txt[idx_dms],
-  decimalLatitude = lat_txt[idx_dms],
-  geodeticDatum = "EPSG:4326",
-  georeferenceRemarks = NA_character_,
-  verbatimLatitude = ver_lat_dms[idx_dms],
-  verbatimLongitude = ver_lon_dms[idx_dms],
+  decimalLongitude        = lon_txt[idx_dms],
+  decimalLatitude         = lat_txt[idx_dms],
+  geodeticDatum           = "EPSG:4326",
+  georeferenceRemarks     = NA_character_,
+  verbatimLatitude        = ver_lat_dms[idx_dms],
+  verbatimLongitude       = ver_lon_dms[idx_dms],
   verbatimCoordinateSystem = "DMS",
-  verbatimSRS = "EPSG:4326"
+  verbatimSRS             = "EPSG:4326"
 )]
 
 # --- Coordinates: 3. SWEREF99 TM ---------------------------------------------
 
 idx_missing <- !(has_value(dwc$decimalLatitude) & has_value(dwc$decimalLongitude))
-
-idx_sweref <- idx_missing &
-  has_value(fm_raw$Sweref_O) &
-  has_value(fm_raw$Sweref_N) &
+idx_sweref  <- idx_missing &
+  has_value(fm_raw$Sweref_O) & has_value(fm_raw$Sweref_N) &
   is_valid_sweref(fm_raw$Sweref_N_num, fm_raw$Sweref_O_num)
 
 if (any(idx_sweref)) {
-  pts <- st_as_sf(
-    fm_raw[idx_sweref, .(x = Sweref_O_num, y = Sweref_N_num)],
-    coords = c("x", "y"),
-    crs = 3006
-  )
-  
-  pts <- st_transform(pts, 4326)
+  pts    <- st_as_sf(fm_raw[idx_sweref, .(x = Sweref_O_num, y = Sweref_N_num)],
+                     coords = c("x", "y"), crs = 3006)
+  pts    <- st_transform(pts, 4326)
   coords <- st_coordinates(pts)
   
   dwc[idx_sweref, `:=`(
-    decimalLongitude = sprintf("%.5f", coords[, 1]),
-    decimalLatitude = sprintf("%.5f", coords[, 2]),
-    geodeticDatum = "EPSG:4326",
-    georeferenceRemarks = NA_character_,
-    verbatimLatitude = trimws(fm_raw$Sweref_N[idx_sweref]),
-    verbatimLongitude = trimws(fm_raw$Sweref_O[idx_sweref]),
+    decimalLongitude        = sprintf("%.5f", coords[, 1]),
+    decimalLatitude         = sprintf("%.5f", coords[, 2]),
+    geodeticDatum           = "EPSG:4326",
+    georeferenceRemarks     = NA_character_,
+    verbatimLatitude        = trimws(fm_raw$Sweref_N[idx_sweref]),
+    verbatimLongitude       = trimws(fm_raw$Sweref_O[idx_sweref]),
     verbatimCoordinateSystem = "SWEREF99 TM",
-    verbatimSRS = "EPSG:3006"
+    verbatimSRS             = "EPSG:3006"
   )]
 }
 
 # --- Coordinates: 4. RT90 ----------------------------------------------------
 
 idx_missing <- !(has_value(dwc$decimalLatitude) & has_value(dwc$decimalLongitude))
-
-idx_rt90 <- idx_missing &
-  has_value(fm_raw$RiketsO) &
-  has_value(fm_raw$RiketsN) &
+idx_rt90    <- idx_missing &
+  has_value(fm_raw$RiketsO) & has_value(fm_raw$RiketsN) &
   is_valid_rt90(fm_raw$RiketsN_num, fm_raw$RiketsO_num)
 
 if (any(idx_rt90)) {
-  pts <- st_as_sf(
-    fm_raw[idx_rt90, .(x = RiketsO_num, y = RiketsN_num)],
-    coords = c("x", "y"),
-    crs = 3021
-  )
-  
-  pts <- st_transform(pts, 4326)
+  pts    <- st_as_sf(fm_raw[idx_rt90, .(x = RiketsO_num, y = RiketsN_num)],
+                     coords = c("x", "y"), crs = 3021)
+  pts    <- st_transform(pts, 4326)
   coords <- st_coordinates(pts)
   
   dwc[idx_rt90, `:=`(
-    decimalLongitude = sprintf("%.5f", coords[, 1]),
-    decimalLatitude = sprintf("%.5f", coords[, 2]),
-    geodeticDatum = "EPSG:4326",
-    georeferenceRemarks = NA_character_,
-    verbatimLatitude = trimws(fm_raw$RiketsN[idx_rt90]),
-    verbatimLongitude = trimws(fm_raw$RiketsO[idx_rt90]),
+    decimalLongitude        = sprintf("%.5f", coords[, 1]),
+    decimalLatitude         = sprintf("%.5f", coords[, 2]),
+    geodeticDatum           = "EPSG:4326",
+    georeferenceRemarks     = NA_character_,
+    verbatimLatitude        = trimws(fm_raw$RiketsN[idx_rt90]),
+    verbatimLongitude       = trimws(fm_raw$RiketsO[idx_rt90]),
     verbatimCoordinateSystem = "RT90",
-    verbatimSRS = "EPSG:3021"
+    verbatimSRS             = "EPSG:3021"
   )]
 }
 
@@ -412,7 +326,6 @@ bad_proj_any <- unique(c(bad_sweref$AccessionNo, bad_rt90$AccessionNo))
 
 if (length(bad_proj_any) > 0 && "AccessionNo" %in% names(fm_raw)) {
   idx_bad <- fm_raw$AccessionNo %in% bad_proj_any
-  
   dwc[
     idx_bad & !has_value(dwc$georeferenceRemarks),
     georeferenceRemarks := "Projected coordinates outside plausible Swedish range; excluded from transformation"
@@ -427,167 +340,111 @@ if ("RUBIN" %in% names(fm_raw)) {
 
 # --- eventDate ---------------------------------------------------------------
 
-yr <- suppressWarnings(as.integer(trimws(as.character(fm_raw$Year))))
-mo <- suppressWarnings(as.integer(trimws(as.character(fm_raw$Month))))
-dy <- suppressWarnings(as.integer(trimws(as.character(fm_raw$Day))))
-
+yr   <- suppressWarnings(as.integer(trimws(as.character(fm_raw$Year))))
+mo   <- suppressWarnings(as.integer(trimws(as.character(fm_raw$Month))))
+dy   <- suppressWarnings(as.integer(trimws(as.character(fm_raw$Day))))
 date <- rep(NA_character_, nrow(fm_raw))
 
 has_year  <- !is.na(yr)
-has_month <- has_year & !is.na(mo)
+has_month <- has_year  & !is.na(mo)
 has_day   <- has_month & !is.na(dy)
 
-date[has_year]  <- sprintf("%04d", yr[has_year])
-date[has_month] <- sprintf("%04d-%02d", yr[has_month], mo[has_month])
-date[has_day]   <- sprintf("%04d-%02d-%02d", yr[has_day], mo[has_day], dy[has_day])
+date[has_year]  <- sprintf("%04d",          yr[has_year])
+date[has_month] <- sprintf("%04d-%02d",     yr[has_month], mo[has_month])
+date[has_day]   <- sprintf("%04d-%02d-%02d", yr[has_day],  mo[has_day],  dy[has_day])
 
 dwc[, eventDate := date]
-dwc[, year := yr]
+dwc[, year  := yr]
 dwc[, month := mo]
-dwc[, day := dy]
+dwc[, day   := dy]
 
 # --- Clean character fields --------------------------------------------------
 
 dwc[] <- lapply(dwc, function(x) {
-  if (is.character(x)) {
-    gsub("[[:cntrl:]]+", " ", x)
-  } else {
-    x
-  }
+  if (is.character(x)) gsub("[[:cntrl:]]+", " ", x) else x
 })
 
 # --- Reorder columns ---------------------------------------------------------
 
 wanted_order <- c(
-  "id",
-  "institutionCode",
-  "collectionCode",
-  "basisOfRecord",
-  "occurrenceID",
-  "occurrenceStatus",
-  "catalogNumber",
-  "recordNumber",
-  "recordedBy",
-  "associatedMedia",
-  "occurrenceRemarks",
-  "verbatimLabel",
-  "eventDate",
-  "year",
-  "month",
-  "day",
-  "continent",
-  "country",
-  "stateProvince",
-  "county",
-  "locality",
-  "decimalLatitude",
-  "decimalLongitude",
-  "geodeticDatum",
-  "georeferenceRemarks",
-  "verbatimLatitude",
-  "verbatimLongitude",
-  "verbatimCoordinateSystem",
-  "verbatimSRS",
+  "id", "institutionCode", "collectionCode", "basisOfRecord",
+  "occurrenceID", "occurrenceStatus", "catalogNumber", "recordNumber",
+  "recordedBy", "associatedMedia", "occurrenceRemarks", "verbatimLabel",
+  "eventDate", "year", "month", "day",
+  "continent", "country", "stateProvince", "county", "locality",
+  "decimalLatitude", "decimalLongitude", "geodeticDatum", "georeferenceRemarks",
+  "verbatimLatitude", "verbatimLongitude", "verbatimCoordinateSystem", "verbatimSRS",
   "dynamicProperties",
-  "scientificName",
-  "scientificNameAuthorship",
-  "originalNameUsage",
-  "verbatimIdentification",
-  "identificationRemarks",
-  "genus",
-  "specificEpithet",
-  "infraspecificEpithet",
-  "taxonRemarks",
-  "typeStatus",
-  "minimumElevationInMeters",
-  "maximumElevationInMeters"
+  "scientificName", "scientificNameAuthorship", "originalNameUsage",
+  "verbatimIdentification", "identificationRemarks",
+  "genus", "specificEpithet", "infraspecificEpithet", "taxonRemarks",
+  "typeStatus", "minimumElevationInMeters", "maximumElevationInMeters"
 )
 
 wanted_order <- wanted_order[wanted_order %in% names(dwc)]
-extra_cols <- setdiff(names(dwc), wanted_order)
-
-dwc <- dwc[, c(wanted_order, extra_cols), with = FALSE]
+extra_cols   <- setdiff(names(dwc), wanted_order)
+dwc          <- dwc[, c(wanted_order, extra_cols), with = FALSE]
 
 # --- QA summary objects ------------------------------------------------------
 
 qa_sheets <- list()
+n_rows    <- nrow(dwc)
 
-n_rows <- nrow(dwc)
-
-dup_ids <- data.table()
+dup_ids   <- data.table()
 n_dup_ids <- 0L
 n_dup_rows <- 0L
 
 if ("id" %in% names(dwc)) {
-  dup_ids <- dwc[, .N, by = id][N > 1][order(-N, id)]
-  n_dup_ids <- nrow(dup_ids)
+  dup_ids    <- dwc[, .N, by = id][N > 1][order(-N, id)]
+  n_dup_ids  <- nrow(dup_ids)
   n_dup_rows <- if (n_dup_ids > 0) sum(dup_ids$N) else 0L
 }
 
 n_bad_sweref <- nrow(bad_sweref)
-n_bad_rt90 <- nrow(bad_rt90)
+n_bad_rt90   <- nrow(bad_rt90)
 
-if (n_bad_rt90 > 0) {
-  qa_sheets$bad_rt90 <- bad_rt90
-}
-
-if (n_bad_sweref > 0) {
-  qa_sheets$bad_sweref <- bad_sweref
-}
+if (n_bad_rt90   > 0) qa_sheets$bad_rt90   <- bad_rt90
+if (n_bad_sweref > 0) qa_sheets$bad_sweref <- bad_sweref
 
 # --- QA: media links ---------------------------------------------------------
 
-bad_media <- data.table()
+bad_media  <- data.table()
 n_bad_media <- NA_integer_
 
 if (check_media && "associatedMedia" %in% names(dwc)) {
-  media_ok <- check_media_exists(dwc$associatedMedia)
-  
-  bad_media <- dwc[!is.na(media_ok) & !media_ok, .(
-    id,
-    associatedMedia
-  )]
-  
+  media_ok    <- check_media_exists(dwc$associatedMedia)
+  bad_media   <- dwc[!is.na(media_ok) & !media_ok, .(id, associatedMedia)]
   n_bad_media <- nrow(bad_media)
   
-  if (n_bad_media > 0) {
-    qa_sheets$bad_media <- bad_media
-  }
+  if (n_bad_media > 0) qa_sheets$bad_media <- bad_media
 }
 
 # --- Export ------------------------------------------------------------------
 
 out_file <- file.path(
-  "data",
-  "dwc",
+  "data", "dwc",
   paste0("occurrence_", format(Sys.time(), "%y%m%d-%H%M%S"), ".csv")
 )
 
-readr::write_excel_csv(
-  dwc,
-  out_file,
-  na = ""
-)
+readr::write_excel_csv(dwc, out_file, na = "")
 
 qa_file <- file.path(
-  "data",
-  "qc",
+  "data", "qc",
   paste0("qa_", format(Sys.time(), "%y%m%d-%H%M%S"), ".xlsx")
 )
 
-if (length(qa_sheets) > 0) {
-  write_xlsx(qa_sheets, qa_file)
-}
+if (length(qa_sheets) > 0) write_xlsx(qa_sheets, qa_file)
 
 # --- Summary -----------------------------------------------------------------
 
 cat("\n")
 cat("--- Summary ----------------------------------------------------------\n")
-cat("Input source: ", input_source, "\n", sep = "")
-cat("Output file: ", out_file, "\n", sep = "")
-cat("Rows in dwc: ", format(n_rows, big.mark = " "), "\n", sep = "")
-cat("Invalid SWEREF rows: ", format(n_bad_sweref, big.mark = " "), "\n", sep = "")
-cat("Invalid RT90 rows: ", format(n_bad_rt90, big.mark = " "), "\n", sep = "")
+cat("Input source:        ", input_source,                       "\n", sep = "")
+cat("Output file:         ", out_file,                           "\n", sep = "")
+cat("Rows in dwc:         ", format(n_rows,        big.mark = " "), "\n", sep = "")
+cat("Invalid SWEREF rows: ", format(n_bad_sweref,  big.mark = " "), "\n", sep = "")
+cat("Invalid RT90 rows:   ", format(n_bad_rt90,    big.mark = " "), "\n", sep = "")
+
 if (is.na(n_bad_media)) {
   cat("Invalid media links: not checked\n")
 } else {
@@ -595,7 +452,7 @@ if (is.na(n_bad_media)) {
 }
 
 if (length(qa_sheets) > 0) {
-  cat("QA file written: ", qa_file, "\n", sep = "")
+  cat("QA file written:     ", qa_file, "\n", sep = "")
 } else {
   cat("QA file not written: no QA issues found\n")
 }
@@ -606,12 +463,16 @@ if (!"id" %in% names(dwc)) {
   cat("ID check: OK (no duplicate ids)\n")
 } else {
   cat("ID check: DUPLICATES FOUND\n")
-  cat("Duplicated ids: ", format(n_dup_ids, big.mark = " "), "\n", sep = "")
-  cat("Rows involved: ", format(n_dup_rows, big.mark = " "), "\n", sep = "")
+  cat("Duplicated ids: ", format(n_dup_ids,  big.mark = " "), "\n", sep = "")
+  cat("Rows involved:  ", format(n_dup_rows, big.mark = " "), "\n", sep = "")
   print(dup_ids)
 }
 
-# --- Keep only main outputs --------------------------------------------------
+# --- Cleanup -----------------------------------------------------------------
+# Keeps: fm_raw, dwc, bad_rt90, bad_sweref, bad_media, dup_ids (pipeline outputs)
+# Keeps: n_dup_ids, n_dup_rows, n_bad_sweref, n_bad_rt90, n_bad_media (QA counts for publish_ipt.R)
+# Keeps: out_file (used by publish_ipt.R for version comment)
+# Keeps: input_mode, load_to_db, check_media, publish_ipt (pipeline flags)
 
 rm(list = setdiff(ls(), c(
   "fm_raw",
@@ -620,6 +481,14 @@ rm(list = setdiff(ls(), c(
   "bad_sweref",
   "bad_media",
   "dup_ids",
+  "n_dup_ids",
+  "n_dup_rows",
+  "n_bad_sweref",
+  "n_bad_rt90",
+  "n_bad_media",
+  "out_file",
+  "input_mode",
   "load_to_db",
-  "input_mode"
+  "check_media",
+  "publish_ipt"
 )))

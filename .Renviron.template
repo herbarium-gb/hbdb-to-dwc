@@ -1,12 +1,19 @@
+# --- FileMaker API --------------------------------------------
+
+HBDB_API_PWD=your_api_password_here
+FM_BASE_URL=https://your-filemaker-server.example.com
+
 # --- PostgreSQL ------------------------------------------------
 
 PGDATABASE=herbarium
 PGUSER=herbarium
-PGPASSWORD=your_password_here
+PGPASSWORD=your_pg_password_here
 PGHOST=localhost
-PGPORT=5432
+PGPORT=5432  # or 5433 to avoid port conflicts
 
-# --- FileMaker API --------------------------------------------
+# --- IPT -------------------------------------------------
 
-HBDB_API_PWD=your_password_here
-FM_BASE_URL=https://your-filemaker-server.example.com
+IPT_BASE_URL=https://test.gbif.se/ipt
+IPT_RESOURCE=gb_herbarium
+IPT_USER=your_user_email
+IPT_PASS=your_ipt_password_here

@@ -10,32 +10,26 @@ library(httr)
 library(jsonlite)
 library(data.table)
 library(writexl)
+library(keyring)
 
-# --- API config --------------------------------------------------------------
-
-pwd <- Sys.getenv("HBDB_API_PWD")
-if (!nzchar(pwd)) {
-  stop("Missing env var: HBDB_API_PWD")
-}
+# --- Credentials -------------------------------------------------------------
 
 base_url <- Sys.getenv("FM_BASE_URL")
-if (!nzchar(base_url)) {
-  stop("Missing env var: FM_BASE_URL")
-}
+if (!nzchar(base_url)) stop("Missing env var: FM_BASE_URL")
 
 layout_name <- "GBIF_export"
 
-
 # --- Function ----------------------------------------------------------------
 
-fetch_filemaker_data <- function(pwd, batch_size = 1000, max_records = NULL) {
+fetch_filemaker_data <- function(batch_size = 1000, max_records = NULL) {
+  
+  pwd <- keyring::key_get("hbdb_api", username = "api")
+  if (!nzchar(pwd)) stop("Missing password in keyring: hbdb_api / api")
   
   sessions_url <- paste0(base_url, "/sessions")
-  records_url <- paste0(base_url, "/layouts/", layout_name, "/records")
+  records_url  <- paste0(base_url, "/layouts/", layout_name, "/records")
   
-  
-  # --- Login -----------------------------------------------------------------
-  
+  # Login
   res_login <- POST(
     sessions_url,
     authenticate("api", pwd),
@@ -45,13 +39,13 @@ fetch_filemaker_data <- function(pwd, batch_size = 1000, max_records = NULL) {
     timeout(120)
   )
   
+  rm(pwd)
+  
   stop_for_status(res_login)
   
   token <- content(res_login, as = "parsed", type = "application/json")$response$token
   
-  
-  # --- Ensure logout on exit -------------------------------------------------
-  
+  # Ensure logout on exit
   on.exit(
     try(
       DELETE(
@@ -64,16 +58,10 @@ fetch_filemaker_data <- function(pwd, batch_size = 1000, max_records = NULL) {
     add = TRUE
   )
   
-  
-  # --- Initialize pagination state ------------------------------------------
-  
-  all_rows <- vector("list", 0)
-  offset <- 1
+  all_rows      <- vector("list", 0)
+  offset        <- 1
   total_fetched <- 0
-  found_count <- NA_integer_
-  
-  
-  # --- Pagination loop -------------------------------------------------------
+  found_count   <- NA_integer_
   
   repeat {
     current_limit <- if (is.null(max_records)) {
@@ -97,9 +85,7 @@ fetch_filemaker_data <- function(pwd, batch_size = 1000, max_records = NULL) {
     
     out <- content(res, as = "parsed", type = "application/json")
     
-    if (out$messages[[1]]$code != "0") {
-      stop(out$messages[[1]]$message)
-    }
+    if (out$messages[[1]]$code != "0") stop(out$messages[[1]]$message)
     
     page_data <- out$response$data
     
@@ -114,10 +100,7 @@ fetch_filemaker_data <- function(pwd, batch_size = 1000, max_records = NULL) {
     if (n == 0) break
     
     rows <- lapply(page_data, function(x) {
-      c(
-        list(recordId = x$recordId, modId = x$modId),
-        x$fieldData
-      )
+      c(list(recordId = x$recordId, modId = x$modId), x$fieldData)
     })
     
     all_rows[[length(all_rows) + 1]] <- rows
@@ -134,9 +117,7 @@ fetch_filemaker_data <- function(pwd, batch_size = 1000, max_records = NULL) {
   
   cat("Loop finished\n")
   
-  if (length(all_rows) == 0) {
-    return(data.table())
-  }
+  if (length(all_rows) == 0) return(data.table())
   
   all_rows <- unlist(all_rows, recursive = FALSE)
   
@@ -146,32 +127,29 @@ fetch_filemaker_data <- function(pwd, batch_size = 1000, max_records = NULL) {
   
   cat("Binding rows...\n")
   
-  fm_raw <- rbindlist(all_rows, fill = TRUE)
-  
-  fm_raw
+  rbindlist(all_rows, fill = TRUE)
 }
-
 
 # --- Fetch -------------------------------------------------------------------
 
-# fm_raw <- fetch_filemaker_data(pwd, batch_size = 100, max_records = 500)
-fm_raw <- fetch_filemaker_data(pwd, batch_size = 1000)
+# fm_raw <- fetch_filemaker_data(batch_size = 100, max_records = 500)
+fm_raw <- fetch_filemaker_data(batch_size = 1000)
 
 cat("Rows fetched:", nrow(fm_raw), "\n")
-
 
 # --- Export ------------------------------------------------------------------
 
 raw_file <- file.path(
-  "data",
-  "raw",
+  "data", "raw",
   paste0("fm_raw_", format(Sys.time(), "%y%m%d-%H%M%S"), ".xlsx")
 )
 
-write_xlsx(
-  as.data.frame(fm_raw),
-  raw_file
-)
+write_xlsx(as.data.frame(fm_raw), raw_file)
 
 cat("Raw export written:", raw_file, "\n")
 
+# --- Cleanup -----------------------------------------------------------------
+# Keeps: fm_raw (pipeline output)
+# Keeps: input_mode, load_to_db, check_media, publish_ipt (pipeline flags)
+
+rm(base_url, layout_name, fetch_filemaker_data, raw_file)
