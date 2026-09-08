@@ -54,6 +54,13 @@ abort_publish <- function(msg) {
 
 # --- QA gate -----------------------------------------------------------------
 
+# An empty table must never be published - GBIF would drop every record.
+if (exists("dwc", inherits = TRUE) && nrow(dwc) == 0) {
+  cat("\nDwC table has 0 rows - refusing to publish an empty dataset.\n")
+  ipt_published <- FALSE
+  return(invisible(NULL))
+}
+
 qa_blockers <- character(0)
 
 if (exists("n_dup_ids", inherits = TRUE) && !is.na(n_dup_ids) && n_dup_ids > 0) {

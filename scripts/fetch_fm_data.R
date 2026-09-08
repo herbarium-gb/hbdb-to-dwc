@@ -136,6 +136,10 @@ fm_raw <- fetch_filemaker_data(batch_size = 1000)
 
 cat("Rows fetched:", nrow(fm_raw), "\n")
 
+if (nrow(fm_raw) == 0) {
+  stop("FileMaker returned 0 rows - aborting before this reaches the pipeline.")
+}
+
 # --- Export ------------------------------------------------------------------
 
 raw_file <- file.path(
