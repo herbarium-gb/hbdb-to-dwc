@@ -10,7 +10,6 @@ library(httr)
 library(jsonlite)
 library(data.table)
 library(writexl)
-library(keyring)
 
 # --- Credentials -------------------------------------------------------------
 
@@ -23,8 +22,8 @@ layout_name <- "GBIF_export"
 
 fetch_filemaker_data <- function(batch_size = 1000, max_records = NULL) {
   
-  pwd <- keyring::key_get("hbdb_api", username = "api")
-  if (!nzchar(pwd)) stop("Missing password in keyring: hbdb_api / api")
+  pwd <- Sys.getenv("HBDB_API_PWD")
+  if (!nzchar(pwd)) stop("Missing env var: HBDB_API_PWD")
   
   sessions_url <- paste0(base_url, "/sessions")
   records_url  <- paste0(base_url, "/layouts/", layout_name, "/records")
