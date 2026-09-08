@@ -24,14 +24,16 @@ fetch_filemaker_data <- function(batch_size = 1000, max_records = NULL) {
   
   pwd <- Sys.getenv("HBDB_API_PWD")
   if (!nzchar(pwd)) stop("Missing env var: HBDB_API_PWD")
-  
+
+  usr <- Sys.getenv("HBDB_API_USR", "api")
+
   sessions_url <- paste0(base_url, "/sessions")
   records_url  <- paste0(base_url, "/layouts/", layout_name, "/records")
   
   # Login
   res_login <- POST(
     sessions_url,
-    authenticate("api", pwd),
+    authenticate(usr, pwd),
     body = "{}",
     encode = "raw",
     add_headers(`Content-Type` = "application/json"),
