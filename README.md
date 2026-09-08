@@ -8,6 +8,7 @@ Scripts for exporting herbarium data from FileMaker, transforming it to Darwin C
 - Transform to Darwin Core
 - Export DwC CSV and QA tables
 - Optionally load raw and DwC data into PostgreSQL
+- Optionally publish a new resource version to an IPT (harvested by GBIF)
 
 
 ## Related repository
@@ -44,17 +45,25 @@ install.packages(c(
 Create a `.Renviron` file:
 
 ```r
-HBDB_API_PWD=your_password_here  
+HBDB_API_PWD=your_filemaker_password  
 FM_BASE_URL=https://your-filemaker-server  
 
 PGDATABASE=herbarium  
 PGUSER=herbarium  
-PGPASSWORD=your_password_here  
+PGPASSWORD=your_postgres_password  
 PGHOST=localhost  
 PGPORT=5432  
+
+IPT_BASE_URL=https://test.gbif.se/ipt  
+IPT_RESOURCE=gb_herbarium  
+IPT_USER=you@example.org  
+IPT_PASS=your_ipt_password  
 ```
 
 Restart R after changes.
+
+This file holds passwords. It is ignored by git (`.gitignore`); also restrict access with
+`chmod 600 .Renviron`.
 
 ## Run
 
@@ -69,7 +78,8 @@ source("scripts/run_pipeline.R", echo = FALSE)
 ```r
 input_mode <- "file"   # "file" or "fetch"  
 load_to_db <- FALSE    # TRUE to load into PostgreSQL  
-check_media <- FALSE   # TRUE to validate associatedMedia links (slow)
+check_media <- FALSE   # TRUE to validate associatedMedia links (slow)  
+publish_ipt <- FALSE   # TRUE to publish a new IPT resource version
 ```
 
 ## PostgreSQL
@@ -113,3 +123,5 @@ The scripts assume that PostgreSQL is reachable via these settings.
 - Image links (`associatedMedia`) can be optionally checked
 - Duplicate IDs are checked and reported
 - Data loading replaces all rows in target tables
+- IPT publishing logs in via the web form, publishes a new version, and waits for it to finish
+- The pipeline refuses to continue on an empty dataset (0 rows)
