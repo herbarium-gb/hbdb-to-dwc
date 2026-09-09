@@ -200,11 +200,15 @@ cat("IPT login: OK\n")
 
 # --- Verify resource + current version --------------------------------
 
+# The resource must appear in this account's manage list. If it does not,
+# IPT_RESOURCE / IPT_BASE_URL are almost certainly wrong - stop rather than
+# fire a publish at whatever else answers to that name.
 if (!grepl(sprintf("[?&]r=%s(&|<|\"|')", ipt_resource), check_body) &&
     !grepl(ipt_resource, check_body, fixed = TRUE)) {
-  warning(sprintf(
-    "Resource '%s' not visible on the manage page - continuing, but the publish may 404.",
-    ipt_resource))
+  stop(sprintf(paste0(
+    "Resource '%s' is not in your manage list on %s. Refusing to publish. ",
+    "Check IPT_RESOURCE and IPT_BASE_URL in .Renviron."),
+    ipt_resource, base_url))
 }
 
 current_version <- read_ipt_version(h, ipt_resource)
