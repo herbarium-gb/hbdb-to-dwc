@@ -18,6 +18,28 @@ The image server, web viewer, and the PostgreSQL/IPT deployment are managed
 separately in **[herbarium-platform](https://github.com/herbarium-gb/herbarium-platform)**.
 This repository only produces the data and asks the IPT to publish it.
 
+## Quick start
+
+Assumes `.Renviron`, the SSH tunnel, and the IPT resource are already set up
+(see the sections below for first-time setup).
+
+1. If running off-server, open the database tunnel in its own terminal:
+   `ssh -N herbarium-db`
+2. Open the project in RStudio and restart R, so `.Renviron` is loaded.
+3. Set the switches at the top of `scripts/run_pipeline.R`, e.g.:
+   ```r
+   input_mode  <- "fetch"   # pull fresh data from FileMaker
+   target      <- "test"    # publish to the test IPT
+   load_to_db  <- TRUE
+   publish_ipt <- TRUE
+   ```
+4. Run it with the **Source** button (not line by line, or the prompts
+   answer themselves).
+5. Answer the prompts: `y` past any QA warnings, then `y` (test) or `PROD`
+   (production) to publish.
+
+Afterwards, check the new version and its record count on the IPT.
+
 ## Pipeline
 
 `scripts/run_pipeline.R` runs the stages in order; each stage is also a
