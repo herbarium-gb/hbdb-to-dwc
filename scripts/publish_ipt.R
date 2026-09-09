@@ -266,13 +266,47 @@ repeat {
 
 new_version <- read_ipt_version(h, ipt_resource)
 
+# Largest "<n> record(s)" figure mentioned in the publication report.
+published_n <- {
+  m <- regmatches(rep_body,
+                  gregexpr("[0-9][0-9,]{0,12}(?=\\s*records?\\b)",
+                           rep_body, perl = TRUE, ignore.case = TRUE))[[1]]
+  if (length(m) == 0) NA_integer_
+  else suppressWarnings(max(as.integer(gsub(",", "", m)), na.rm = TRUE))
+}
+
+# Reference row count from this session, if a transform ran before this.
+ref_n <- if (exists("n_rows", inherits = TRUE) && !is.na(n_rows)) {
+  as.integer(n_rows)
+} else if (exists("dwc", inherits = TRUE)) {
+  nrow(dwc)
+} else {
+  NA_integer_
+}
+
 cat("\n--- IPT publish ", toupper(status), " ",
     strrep("-", max(0, 45 - nchar(status))), "\n", sep = "")
 cat("Resource:         ", ipt_resource,                      "\n", sep = "")
 cat("Previous version: ", current_version %||% "unknown",    "\n", sep = "")
 cat("Current version:  ", new_version     %||% "unknown",    "\n", sep = "")
+cat("Records published: ",
+    if (is.na(published_n)) "unknown" else format(published_n, big.mark = " "),
+    "\n", sep = "")
 
 if (identical(status, "completed")) {
+  if (!is.na(published_n) && published_n == 0) {
+    ipt_published <- FALSE
+    stop("IPT published 0 records - the Darwin Core mapping or the source is ",
+         "missing or empty. Fix it in the IPT and publish again.")
+  }
+  if (!is.na(published_n) && !is.na(ref_n) && ref_n > 0 &&
+      published_n < ref_n / 2) {
+    ipt_published <- FALSE
+    stop(sprintf(paste0(
+      "IPT published %s records but this session's DwC table has %s - too far ",
+      "below. Check the IPT source and mapping before trusting this version."),
+      format(published_n, big.mark = " "), format(ref_n, big.mark = " ")))
+  }
   cat("\nGBIF will re-harvest ", ipt_resource,
       " on its next crawl.\n", sep = "")
   ipt_published <- TRUE
@@ -296,4 +330,5 @@ rm(`%||%`, ask_yes_no, abort_publish, read_ipt_version,
    base_url, login_url, publish_url, report_url, rss_url,
    h, home_resp, ck, csrf, login_resp, check_resp, check_body,
    res_url, res_resp, res_body,
-   current_version, pub_resp, deadline, status, rep_resp, rep_body, new_version)
+   current_version, pub_resp, deadline, status, rep_resp, rep_body,
+   new_version, published_n, ref_n)
