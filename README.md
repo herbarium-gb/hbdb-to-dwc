@@ -54,10 +54,15 @@ PGPASSWORD=your_postgres_password
 PGHOST=localhost  
 PGPORT=5433  
 
-IPT_BASE_URL=https://test.gbif.se/ipt  
-IPT_RESOURCE=gb_herbarium  
-IPT_USER=you@example.org  
-IPT_PASS=your_ipt_password  
+IPT_TEST_BASE_URL=https://test.gbif.se/ipt  
+IPT_TEST_RESOURCE=gb_herbarium  
+IPT_TEST_USER=you@example.org  
+IPT_TEST_PASS=your_test_ipt_password  
+
+IPT_PROD_BASE_URL=https://www.gbif.se/ipt  
+IPT_PROD_RESOURCE=gb_herbarium  
+IPT_PROD_USER=you@example.org  
+IPT_PROD_PASS=your_prod_ipt_password  
 ```
 
 Restart R after changes.
@@ -76,11 +81,15 @@ source("scripts/run_pipeline.R", echo = FALSE)
 ### Settings in run_pipeline.R
 
 ```r
-input_mode <- "file"   # "file" or "fetch"  
-load_to_db <- FALSE    # TRUE to load into PostgreSQL  
-check_media <- FALSE   # TRUE to validate associatedMedia links (slow)  
-publish_ipt <- FALSE   # TRUE to publish a new IPT resource version
+input_mode  <- "file"   # "file" or "fetch"  
+target      <- "test"   # "test" or "prod" - which IPT to publish to  
+load_to_db  <- FALSE    # TRUE to load into PostgreSQL  
+check_media <- FALSE    # TRUE to validate associatedMedia links (slow)  
+publish_ipt <- FALSE    # TRUE to publish a new IPT resource version
 ```
+
+Publishing to `prod` (any `IPT_*_BASE_URL` without "test" in it) asks you to type
+`PROD` to confirm, instead of a plain `y`.
 
 ## PostgreSQL
 

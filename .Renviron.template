@@ -12,9 +12,14 @@ PGPASSWORD=your_pg_password_here
 PGHOST=localhost
 PGPORT=5432  # or 5433 to avoid port conflicts
 
-# --- IPT -------------------------------------------------
+# --- IPT (per target; run_pipeline.R picks TEST or PROD) ------
 
-IPT_BASE_URL=https://test.gbif.se/ipt
-IPT_RESOURCE=gb_herbarium
-IPT_USER=your_user_email
-IPT_PASS=your_ipt_password_here
+IPT_TEST_BASE_URL=https://test.gbif.se/ipt
+IPT_TEST_RESOURCE=gb_herbarium
+IPT_TEST_USER=your_test_user_email
+IPT_TEST_PASS=your_test_ipt_password
+
+IPT_PROD_BASE_URL=https://www.gbif.se/ipt
+IPT_PROD_RESOURCE=gb_herbarium
+IPT_PROD_USER=your_prod_user_email
+IPT_PROD_PASS=your_prod_ipt_password
