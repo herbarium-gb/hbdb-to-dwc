@@ -1,120 +1,133 @@
 # herbarium-data
 
-Scripts for exporting herbarium data from FileMaker, transforming it to Darwin Core (DwC), and optionally loading it into PostgreSQL.
+Pipeline for publishing the Gothenburg herbarium (GB) specimen collection to
+[GBIF](https://www.gbif.org/).
 
-## Overview
+Specimen records live in FileMaker. This repository fetches them, transforms
+them to [Darwin Core](https://dwc.tdwg.org/), loads the result into a
+PostgreSQL "publication layer", and triggers an
+[IPT](https://www.gbif.org/ipt) to publish a new version of the dataset.
+GBIF then harvests the IPT on its own schedule.
 
-- Fetch raw data from FileMaker API
-- Transform to Darwin Core
-- Export DwC CSV and QA tables
-- Optionally load raw and DwC data into PostgreSQL
-- Optionally publish a new resource version to an IPT (harvested by GBIF)
+```
+FileMaker  ──►  Darwin Core CSV  ──►  PostgreSQL  ──►  IPT version  ──►  GBIF
+ (fetch)         (transform)          (load)           (publish)        (harvest)
+```
 
+The image server, web viewer, and the PostgreSQL/IPT deployment are managed
+separately in **[herbarium-platform](https://github.com/herbarium-gb/herbarium-platform)**.
+This repository only produces the data and asks the IPT to publish it.
 
-## Related repository
+## Pipeline
 
-This repository handles data extraction and transformation.
+`scripts/run_pipeline.R` runs the stages in order; each stage is also a
+standalone script.
 
-The deployment environment (image server, web viewer, and PostgreSQL used for publishing) is managed separately in:
-
-- https://github.com/herbarium-gb/herbarium-platform
-
-Typical flow:
-
-- `herbarium-data`: fetch + transform + export/load DwC
-- `herbarium-platform`: serve images and publish data (e.g. via IPT)
+| Stage | Script | What it does |
+|-------|--------|--------------|
+| Fetch | `fetch_fm_data.R` | Pulls all records from the FileMaker Data API, writes `data/raw/fm_raw_*.xlsx`. Aborts if the API returns 0 rows. |
+| Transform | `transform_to_dwc.R` | Maps source fields to Darwin Core using `config/col-map.xlsx`, derives coordinates and `eventDate`, writes `data/dwc/occurrence_*.csv` and (if there are issues) `data/qc/qa_*.xlsx`. |
+| Load | `load_to_postgres.R` | Replaces `raw.fm_specimen` and `public.dwc_occurrence` with the latest raw and DwC files. Refuses to load an empty file. |
+| Publish | `publish_ipt.R` | Logs in to the IPT, publishes a new resource version, polls until it finishes, and checks the published record count. |
 
 ## Requirements
 
+R (4.x) with:
+
 ```r
 install.packages(c(
-  "httr",
-  "jsonlite",
-  "data.table",
-  "readxl",
-  "sf",
-  "readr",
-  "writexl",
-  "DBI",
-  "RPostgres"
+  "httr", "jsonlite", "data.table", "readxl",
+  "sf", "readr", "writexl", "DBI", "RPostgres"
 ))
 ```
 
 ## Configuration
 
-Create a `.Renviron` file:
+Create a `.Renviron` file in the project root:
 
 ```r
-HBDB_API_PWD=your_filemaker_password  
-FM_BASE_URL=https://your-filemaker-server  
+# FileMaker Data API
+HBDB_API_USR=api
+HBDB_API_PWD=your_filemaker_password
+FM_BASE_URL=https://your-filemaker-server/fmi/data/vLatest/databases/<db>
 
-PGDATABASE=herbarium  
-PGUSER=herbarium  
-PGPASSWORD=your_postgres_password  
-PGHOST=localhost  
-PGPORT=5433  
+# PostgreSQL publication layer
+PGDATABASE=herbarium
+PGUSER=herbarium
+PGPASSWORD=your_postgres_password
+PGHOST=localhost
+PGPORT=5433
 
-IPT_TEST_BASE_URL=https://test.gbif.se/ipt  
-IPT_TEST_RESOURCE=gb_herbarium  
-IPT_TEST_USER=you@example.org  
-IPT_TEST_PASS=your_test_ipt_password  
+# IPT - one block per target
+IPT_TEST_BASE_URL=https://test.gbif.se/ipt
+IPT_TEST_RESOURCE=gb_herbarium
+IPT_TEST_USER=you@example.org
+IPT_TEST_PASS=your_test_ipt_password
 
-IPT_PROD_BASE_URL=https://www.gbif.se/ipt  
-IPT_PROD_RESOURCE=gb_herbarium  
-IPT_PROD_USER=you@example.org  
-IPT_PROD_PASS=your_prod_ipt_password  
+IPT_PROD_BASE_URL=https://www.gbif.se/ipt
+IPT_PROD_RESOURCE=gb_herbarium
+IPT_PROD_USER=you@example.org
+IPT_PROD_PASS=your_prod_ipt_password
 ```
 
-Restart R after changes.
+Restart R after editing `.Renviron` — it is only read at startup.
 
-This file holds passwords. It is ignored by git (`.gitignore`); also restrict access with
-`chmod 600 .Renviron`.
+`.Renviron` holds passwords. It is git-ignored; also run `chmod 600 .Renviron`
+so only your account can read it. `HBDB_API_USR` defaults to `api` if unset.
 
-## Run
+## Running the pipeline
 
-Run the full pipeline:
+Open the project and use the **Source** button on `scripts/run_pipeline.R`, or:
 
 ```r
 source("scripts/run_pipeline.R", echo = FALSE)
 ```
 
-### Settings in run_pipeline.R
+Run it via Source (not by stepping through the lines) so the confirmation
+prompts wait for your answer.
+
+### Settings
+
+Edit the top of `run_pipeline.R`:
 
 ```r
-input_mode  <- "file"   # "file" or "fetch"  
-target      <- "test"   # "test" or "prod" - which IPT to publish to  
-load_to_db  <- FALSE    # TRUE to load into PostgreSQL  
-check_media <- FALSE    # TRUE to validate associatedMedia links (slow)  
-publish_ipt <- FALSE    # TRUE to publish a new IPT resource version
+input_mode  <- "file"   # "file" = use the latest data/raw file; "fetch" = pull from FileMaker
+target      <- "test"   # "test" or "prod" - which IPT to publish to
+load_to_db  <- FALSE    # TRUE writes to PostgreSQL (TRUNCATE + reload both tables)
+check_media <- FALSE    # TRUE opens every associatedMedia URL to check it (slow: one request per record)
+publish_ipt <- FALSE    # TRUE publishes a new IPT version
 ```
 
-Publishing to `prod` (any `IPT_*_BASE_URL` without "test" in it) asks you to type
-`PROD` to confirm, instead of a plain `y`.
+`target` selects which `IPT_TEST_*` / `IPT_PROD_*` block from `.Renviron` is used.
 
-## PostgreSQL
+### Prompts
 
-To enable database loading:
+- **QA gate** — if the transform found duplicate `occurrenceID`s, invalid
+  projected coordinates, or broken media links, the publish step lists them
+  and asks whether to continue.
+- **Publish confirmation** — `test` asks for a plain `y`; any IPT whose URL
+  does not contain `test` is treated as production and asks you to type
+  `PROD` (exactly, uppercase).
 
-- A PostgreSQL instance must be running
-- Tables `raw.fm_specimen` and `public.dwc_occurrence` must exist
-- Connection is configured via `.Renviron`
+## PostgreSQL access
 
-### Connecting to PostgreSQL
+The pipeline and the IPT both read the same PostgreSQL database. It is a
+staging layer only — its contents are replaced on every load.
 
-If you run R on the database server itself, no tunnel is needed (set `PGPORT=5432`).
+If you run R on the database server itself, no tunnel is needed — set
+`PGPORT=5432`.
 
-If you run R on your own machine, the database is reached over an SSH tunnel that
-forwards local port `5433` to port `5432` on the database server. Local port `5433`
-avoids clashing with a PostgreSQL that may already be running locally on `5432`.
-
-Run the tunnel in its own terminal and leave it open:
+If you run R on your own machine, reach the database over an SSH tunnel that
+forwards local port `5433` to port `5432` on the server (`5433` avoids
+clashing with a local PostgreSQL on `5432`). Run it in its own terminal and
+leave it open:
 
 ```bash
 ssh -N -L 5433:localhost:5432 user@your-server
 ```
 
-As an alternative, add a `~/.ssh/config` entry (ask the maintainer for host and user)
-and start the tunnel by name:
+Or add a `~/.ssh/config` entry (ask the maintainer for host and user) and
+start it by name:
 
 ```
 Host herbarium-db
@@ -128,24 +141,40 @@ Host herbarium-db
 ssh -N herbarium-db
 ```
 
-Either way, set in `.Renviron`:
+Then set `PGHOST=localhost` and `PGPORT=5433` in `.Renviron`.
 
-```r
-PGHOST=localhost  
-PGPORT=5433  
-```
+`load_to_postgres.R` needs the tables `raw.fm_specimen` and
+`public.dwc_occurrence` to already exist.
+
+## IPT publishing
+
+`publish_ipt.R` mimics the IPT web UI (there is no REST API): it fetches a
+CSRF token, logs in with a form + session cookie, POSTs `manage/publish.do`,
+then polls `manage/report.do` until the publication finishes.
+
+It does **not** configure the resource. Before it can publish anything, the
+IPT resource must already have, set up by hand in the IPT:
+
+- a **source** (the PostgreSQL connection),
+- a complete **Darwin Core mapping** (Occurrence core),
+- a **publishing organisation**,
+- the mandatory metadata fields.
+
+A resource missing any of these publishes an empty archive. `publish_ipt.R`
+stops if the new version has 0 records, or fewer than half the rows produced
+by the transform in the same session.
 
 ## Outputs
 
-- `data/dwc/occurrence_YYMMDD-HHMMSS.csv`
-- `data/qc/qa_YYMMDD-HHMMSS.xlsx` (only if QA issues are found)
+- `data/raw/fm_raw_YYMMDD-HHMMSS.xlsx` — raw FileMaker export (only on `input_mode = "fetch"`)
+- `data/dwc/occurrence_YYMMDD-HHMMSS.csv` — Darwin Core table
+- `data/qc/qa_YYMMDD-HHMMSS.xlsx` — QA sheets, written only when there are coordinate or media issues
 
-## Notes
+## Behaviour notes
 
-- Coordinates derived from: decimal → DMS → SWEREF99 → RT90
-- Invalid projected coordinates are excluded and reported
-- Image links (`associatedMedia`) can be optionally checked
-- Duplicate IDs are checked and reported
-- Data loading replaces all rows in target tables
-- IPT publishing logs in via the web form, publishes a new version, and waits for it to finish
-- The pipeline refuses to continue on an empty dataset (0 rows)
+- Coordinates are derived in order: decimal degrees → DMS → SWEREF99 TM → RT90, all output as EPSG:4326.
+- Projected coordinates outside a plausible Swedish range are excluded and reported in the QA file.
+- Duplicate `occurrenceID`s are reported to the console and flagged at the QA gate.
+- Loading replaces all rows in `raw.fm_specimen` and `public.dwc_occurrence`.
+- Every stage stops rather than pass an empty (0-row) dataset down the pipeline.
+- The database connection is always closed, even if a load step fails.
