@@ -119,9 +119,19 @@ ipt_published <- (function() {
   cat("User:             ", ipt_username, "\n", sep = "")
   cat("Version comment:  ", ipt_comment,  "\n\n", sep = "")
 
-  if (interactive() && !ask_yes_no("Publish a new version of this resource now?")) {
-    cat("Aborted at final confirmation.\n")
-    return(FALSE)
+  is_prod <- !grepl("test", tolower(base_url), fixed = TRUE)
+
+  if (interactive()) {
+    if (is_prod) {
+      cat("*** PRODUCTION *** - this publishes to ", base_url, "\n", sep = "")
+      if (!identical(trimws(readline("Type PROD to confirm (anything else aborts): ")), "PROD")) {
+        cat("Aborted - production publish not confirmed.\n")
+        return(FALSE)
+      }
+    } else if (!ask_yes_no("Publish a new version of this resource now?")) {
+      cat("Aborted at final confirmation.\n")
+      return(FALSE)
+    }
   }
 
   # --- Session: CSRF token + login -----------------------------------
