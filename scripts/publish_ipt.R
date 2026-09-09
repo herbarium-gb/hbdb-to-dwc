@@ -198,17 +198,24 @@ if (httr::status_code(check_resp) >= 400 ||
 
 cat("IPT login: OK\n")
 
-# --- Verify resource + current version --------------------------------
+# --- Verify the account manages this resource -------------------------
 
-# The resource must appear in this account's manage list. If it does not,
-# IPT_RESOURCE / IPT_BASE_URL are almost certainly wrong - stop rather than
-# fire a publish at whatever else answers to that name.
-if (!grepl(sprintf("[?&]r=%s(&|<|\"|')", ipt_resource), check_body) &&
-    !grepl(ipt_resource, check_body, fixed = TRUE)) {
+# The Manage Resources list is rendered client-side on this IPT version,
+# so its raw HTML never contains the shortname. Check the resource's own
+# overview page instead: for a resource this account manages it returns
+# 200 with the shortname and is not bounced to the resource list.
+res_url  <- paste0(base_url, "/manage/resource.do?r=",
+                   utils::URLencode(ipt_resource, reserved = TRUE))
+res_resp <- httr::GET(res_url, handle = h, httr::timeout(60))
+res_body <- httr::content(res_resp, as = "text", encoding = "UTF-8")
+
+if (httr::status_code(res_resp) >= 400 ||
+    grepl("/manage/resources\\.do", res_resp$url) ||
+    !grepl(ipt_resource, res_body, fixed = TRUE)) {
   stop(sprintf(paste0(
-    "Resource '%s' is not in your manage list on %s. Refusing to publish. ",
-    "Check IPT_RESOURCE and IPT_BASE_URL in .Renviron."),
-    ipt_resource, base_url))
+    "Account %s cannot manage resource '%s' on %s (HTTP %d). Refusing to publish. ",
+    "Check IPT_RESOURCE / IPT_USER in .Renviron."),
+    ipt_username, ipt_resource, base_url, httr::status_code(res_resp)))
 }
 
 current_version <- read_ipt_version(h, ipt_resource)
@@ -288,4 +295,5 @@ rm(`%||%`, ask_yes_no, abort_publish, read_ipt_version,
    publish_timeout_min, poll_interval_sec,
    base_url, login_url, publish_url, report_url, rss_url,
    h, home_resp, ck, csrf, login_resp, check_resp, check_body,
+   res_url, res_resp, res_body,
    current_version, pub_resp, deadline, status, rep_resp, rep_body, new_version)
