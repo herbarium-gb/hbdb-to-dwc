@@ -109,6 +109,26 @@ publish_ipt <- FALSE    # TRUE publishes a new IPT version
   does not contain `test` is treated as production and asks you to type
   `PROD` (exactly, uppercase).
 
+## FileMaker Data API
+
+The fetch stage reads records through the FileMaker Data API. Three things
+must be set up once on the FileMaker side:
+
+1. **Data API enabled** on FileMaker Server (Admin Console → Connectors).
+2. **An API account** on the hosted file whose privilege set has the
+   `fmrest` extended privilege. `fetch_fm_data.R` logs in as `HBDB_API_USR`
+   (default `api`) with `HBDB_API_PWD`.
+3. **A layout** named `GBIF_export`, visible to that account, exposing the
+   source fields the transform expects (accession number, collector, the
+   coordinate fields, year / month / day, and so on).
+
+At runtime the script opens a session (`POST /sessions`), pages through
+`/layouts/GBIF_export/records` 1000 records at a time, and logs out on exit.
+
+If it fails: an error at `POST /sessions` points to the account, its
+`fmrest` privilege, or the server toggle; an error once logged in points to
+the `GBIF_export` layout.
+
 ## PostgreSQL access
 
 The pipeline and the IPT both read the same PostgreSQL database. It is a
