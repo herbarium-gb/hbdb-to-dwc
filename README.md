@@ -52,7 +52,7 @@ PGDATABASE=herbarium
 PGUSER=herbarium  
 PGPASSWORD=your_postgres_password  
 PGHOST=localhost  
-PGPORT=5432  
+PGPORT=5433  
 
 IPT_BASE_URL=https://test.gbif.se/ipt  
 IPT_RESOURCE=gb_herbarium  
@@ -92,24 +92,39 @@ To enable database loading:
 
 ### Connecting to PostgreSQL
 
-If you run R on the same server as PostgreSQL, no additional setup is needed.
+If you run R on the database server itself, no tunnel is needed (set `PGPORT=5432`).
 
-If you run R locally, you typically need an SSH tunnel:
+If you run R on your own machine, the database is reached over an SSH tunnel that
+forwards local port `5433` to port `5432` on the database server. Local port `5433`
+avoids clashing with a PostgreSQL that may already be running locally on `5432`.
+
+Run the tunnel in its own terminal and leave it open:
 
 ```bash
-ssh -L 5432:localhost:5432 user@your-server
+ssh -N -L 5433:localhost:5432 user@your-server
 ```
 
-This forwards your local port `5432` to the server’s PostgreSQL instance.
+As an alternative, add a `~/.ssh/config` entry (ask the maintainer for host and user)
+and start the tunnel by name:
 
-Then use in `.Renviron`:
+```
+Host herbarium-db
+  HostName <database server>
+  User <your user>
+  IdentityFile ~/.ssh/<your key>
+  LocalForward 5433 localhost:5432
+```
+
+```bash
+ssh -N herbarium-db
+```
+
+Either way, set in `.Renviron`:
 
 ```r
 PGHOST=localhost  
-PGPORT=5432  
+PGPORT=5433  
 ```
-
-The scripts assume that PostgreSQL is reachable via these settings.
 
 ## Outputs
 
